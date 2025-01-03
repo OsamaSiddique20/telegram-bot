@@ -1,39 +1,39 @@
 import requests
-from datetime import datetime
-def get_prayers_time_list():
-    list = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
-    timings = []
-    date = datetime.now()
-    today = f"{date.month}/{date.day}/{date.year}"
 
-    for i in range(6):
-        response = requests.get(f"http://localhost:3000/{list[i]}")
+def tConvert(time):
+    # Check correct time format and split into components
+    time = str(time)
+    time_components = time.split(':')
+    
+    if len(time_components) > 1:  # If time format correct
+        hours = int(time_components[0])
+        minutes = int(time_components[1])
+        am_pm = ' AM' if hours < 12 else ' PM'
+        hours = hours % 12 or 12  # Adjust hours
+        return f"{hours}:{minutes:02d}{am_pm}"
+    return time
+
+def get_prayers_time_list():
+    prayer_list = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
+    timings = []
+    try:
+        response = requests.get('http://0.0.0.0:8080/db.json')
         data = response.json()
         
-        for element in data:
-            if element['Start Date'] == today:
-                prayer_time = element['Start Time']
-                time_components = prayer_time.split(":")
-                hour = time_components[0]
-                minute = time_components[1]
-                new_time_string = f"{hour}:{minute} {prayer_time[-2:]}"
-                timings.append(new_time_string)
-                # Add a delay of 2 seconds (optional)
-                # await asyncio.sleep(2)
+        for prayer in prayer_list:
+            time = tConvert(data[prayer]['time'])  # Convert time format
+            timings.append(time)
+        
+        output = ''
+        for count, element in enumerate(timings):
+            output += '☽︎  ' + prayer_list[count] + ' ' + element
+            if count != len(timings) - 1:  # Check if it's not the last element
+                output += '\n'
+        
+        return output
+    except Exception as e:
+        print(e)
+        return []
 
-    
-
-
-
-    prayer_list = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
-    output = ''
-    count = 0
-
-    for element in timings:
-        output += f'☽︎  {prayer_list[count]} {element}\n'
-        count += 1
-
-    print(timings)
-    return output
-
-# print(get_prayers_time_list())
+# Example usage:
+print(get_prayers_time_list())

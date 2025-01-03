@@ -2,7 +2,7 @@ import subprocess
 
 # Define the sudo password (replace 'your_password' with the actual password)
 def getTemp():
-    sudo_password = '3099'
+    sudo_password = 'O$ama@3099'
 
     # Run the 'sudo vcgencmd measure_temp' command with password automation
     command = 'sudo -S vcgencmd measure_temp'
@@ -16,4 +16,4 @@ def getTemp():
             print("Error:", stderr.strip())
     except Exception as e:
         print("Exception:", str(e))
-    return "Temperature:" +str(stdout.strip())
+    return str(stdout.strip())
