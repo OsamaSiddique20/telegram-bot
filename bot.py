@@ -155,6 +155,45 @@ async def main():
         # Sleep for 30 seconds
         await asyncio.sleep(60)
 
+import subprocess
+import os
+
+# Add this with your other command handlers
+async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print('In Reboot')
+    allowed_users = ['6348023188','5849884611']  # Replace with actual user ID(s)
+    user_id = str(update.effective_user.id)
+    
+    if user_id not in allowed_users:
+        await update.message.reply_text("You are not authorized to perform this action.")
+        return
+
+    try:
+        # Send confirmation message
+        await update.message.reply_text("Server reboot initiated. The bot will be offline temporarily.")
+        
+        # Using sudo reboot (similar to your rp_temp.py approach)
+        sudo_password = 'O$ama@3099'  # Consider securing this better
+        command = 'sudo -S reboot'
+        
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate(input=sudo_password + '\n')
+        
+        if process.returncode == 0:
+            await update.message.reply_text("Reboot command executed successfully.")
+        else:
+            await update.message.reply_text(f"Error during reboot: {stderr.strip()}")
+            
+    except Exception as e:
+        await update.message.reply_text(f"Failed to reboot: {str(e)}")
+
 
 def run_bot():
     # Initialize the Application
@@ -172,9 +211,10 @@ def run_bot():
     app.add_handler(CommandHandler('prayerUnsubscribe', unsubs_command))
     app.add_handler(CommandHandler('getchatid', chat_id_command))
     app.add_handler(CommandHandler('ask', ask_command))
+    app.add_handler(CommandHandler('reboot', reboot_command))
+
     # Define message handler
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
-    
     # Start the bot polling
     app.run_polling()
 
