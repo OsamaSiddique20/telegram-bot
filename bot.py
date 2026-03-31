@@ -9,6 +9,9 @@ from subscribe import get_subscribe
 from unsubscribe import get_unsubscribe
 from chatid import get_all_chat_ids
 from reminder import get_reminders
+
+from result_bot import get_result_image, cleanup_file
+
 import asyncio
 import requests
 import datetime 
@@ -61,8 +64,25 @@ async def chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    response = handle_response(text)
     chat_id = update.message.chat_id
+
+    if text and text.strip():
+        await update.message.reply_text(f"Processing {text}...")
+
+        try:
+            image_path = get_result_image(text)
+
+            await update.message.reply_photo(photo=open(image_path, 'rb'))
+
+            cleanup_file(image_path)
+
+        except Exception as e:
+            print(e)
+            await update.message.reply_text("Error processing request.")
+
+        return
+
+    response = handle_response(text)
     if response:
         await update.message.reply_text(response)
 
@@ -118,7 +138,6 @@ def clean_newlines(text):
     # Use regex to replace two or more newlines with a single newline
     return text.replace('\\n\\n', '\n')
 
-
 async def main():
 
     print('In Main')
@@ -157,6 +176,31 @@ async def main():
 
 import subprocess
 import os
+
+from result_bot import get_result_image, cleanup_file
+
+async def weight_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+
+    # Get name after command
+    if context.args:
+        name = ' '.join(context.args)
+    else:
+        await update.message.reply_text("Usage: /weight Osama")
+        return
+
+    await update.message.reply_text(f"Processing {name}...")
+
+    try:
+        image_path = get_result_image(name)
+
+        await update.message.reply_photo(photo=open(image_path, 'rb'))
+
+        cleanup_file(image_path)
+
+    except Exception as e:
+        print(e)
+        await update.message.reply_text("Error processing request.")
 
 # Add this with your other command handlers
 async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,6 +256,7 @@ def run_bot():
     app.add_handler(CommandHandler('getchatid', chat_id_command))
     app.add_handler(CommandHandler('ask', ask_command))
     app.add_handler(CommandHandler('reboot', reboot_command))
+    app.add_handler(CommandHandler('weight', weight_command))
 
     # Define message handler
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
