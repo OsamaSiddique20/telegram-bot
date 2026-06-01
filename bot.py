@@ -202,6 +202,29 @@ async def weight_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(e)
         await update.message.reply_text("Error processing request.")
 
+from screenshot_bot import take_screenshot, cleanup_file
+
+async def screenshot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Usage: /screenshot google.com")
+        return
+
+    url = context.args[0]
+
+    await update.message.reply_text(f"Capturing {url}... 📸")
+
+    try:
+        image_path = take_screenshot(url)
+
+        with open(image_path, 'rb') as photo:
+            await update.message.reply_photo(photo=photo)
+
+        cleanup_file(image_path)
+
+    except Exception as e:
+        print(e)
+        await update.message.reply_text("Failed to capture screenshot.")
+
 # Add this with your other command handlers
 async def reboot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print('In Reboot')
@@ -257,11 +280,14 @@ def run_bot():
     app.add_handler(CommandHandler('ask', ask_command))
     app.add_handler(CommandHandler('reboot', reboot_command))
     app.add_handler(CommandHandler('weight', weight_command))
+    app.add_handler(CommandHandler('screenshot', screenshot_command))
 
     # Define message handler
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     # Start the bot polling
     app.run_polling()
+
+
 
 # The rest of the code remains unchanged
 if __name__ == '__main__':
