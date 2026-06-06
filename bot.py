@@ -17,6 +17,12 @@ import requests
 import datetime 
 import urllib.parse
 import re
+import os
+import platform
+import shutil
+
+IP_CHECK_INTERVAL_SECONDS = 5 * 60
+BOT_STARTED_AT = datetime.datetime.now()
 
 async def hello(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f'Hello {update.effective_user.first_name}')
@@ -61,26 +67,12 @@ async def unsubs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     await update.message.reply_text(chat_id)
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(get_status_message())
     
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    chat_id = update.message.chat_id
-
-    if text and text.strip():
-        await update.message.reply_text(f"Processing {text}...")
-
-        try:
-            image_path = get_result_image(text)
-
-            await update.message.reply_photo(photo=open(image_path, 'rb'))
-
-            cleanup_file(image_path)
-
-        except Exception as e:
-            print(e)
-            await update.message.reply_text("Error processing request.")
-
-        return
 
     response = handle_response(text)
     if response:
@@ -138,10 +130,119 @@ def clean_newlines(text):
     # Use regex to replace two or more newlines with a single newline
     return text.replace('\\n\\n', '\n')
 
+def format_duration(total_seconds):
+    total_seconds = int(total_seconds)
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, _ = divmod(remainder, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    parts.append(f"{minutes}m")
+    return " ".join(parts)
+
+def get_system_uptime():
+    try:
+        with open('/proc/uptime', 'r') as uptime_file:
+            uptime_seconds = float(uptime_file.readline().split()[0])
+        return format_duration(uptime_seconds)
+    except Exception as e:
+        print("Uptime error:", e)
+        return "Unavailable"
+
+def get_memory_usage():
+    try:
+        memory = {}
+        with open('/proc/meminfo', 'r') as meminfo:
+            for line in meminfo:
+                key, value = line.split(':', 1)
+                memory[key] = int(value.strip().split()[0])
+
+        total_mb = memory['MemTotal'] / 1024
+        available_mb = memory['MemAvailable'] / 1024
+        used_mb = total_mb - available_mb
+        used_percent = (used_mb / total_mb) * 100
+
+        return f"{used_mb:.0f}/{total_mb:.0f} MB ({used_percent:.0f}%)"
+    except Exception as e:
+        print("Memory error:", e)
+        return "Unavailable"
+
+def get_cpu_temperature():
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as temp_file:
+            temp_c = int(temp_file.read().strip()) / 1000
+        return f"{temp_c:.1f} C"
+    except Exception as e:
+        print("CPU temperature error:", e)
+        return "Unavailable"
+
+def get_status_message():
+    now = datetime.datetime.now()
+    bot_uptime = format_duration((now - BOT_STARTED_AT).total_seconds())
+    disk = shutil.disk_usage('/')
+    disk_used_percent = (disk.used / disk.total) * 100
+    public_ip, local_ip = get_public_ip()
+
+    try:
+        load_average = ", ".join(f"{load:.2f}" for load in os.getloadavg())
+    except Exception:
+        load_average = "Unavailable"
+
+    return (
+        "Server Status\n"
+        f"Host: {platform.node() or 'Unknown'}\n"
+        f"Bot uptime: {bot_uptime}\n"
+        f"System uptime: {get_system_uptime()}\n"
+        f"CPU temp: {get_cpu_temperature()}\n"
+        f"Load avg: {load_average}\n"
+        f"RAM: {get_memory_usage()}\n"
+        f"Disk: {disk.used / (1024 ** 3):.1f}/{disk.total / (1024 ** 3):.1f} GB ({disk_used_percent:.0f}%)\n"
+        f"Public IP: {public_ip or 'Unavailable'}\n"
+        f"Local IP: {local_ip or 'Unavailable'}\n"
+        f"Time: {now.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+async def check_public_ip_change(last_public_ip):
+    public_ip, local_ip = get_public_ip()
+
+    if not public_ip:
+        print("Public IP check skipped: could not get current IP.")
+        return last_public_ip
+
+    if last_public_ip is None:
+        print("Initial public IP:", public_ip)
+        return public_ip
+
+    if public_ip != last_public_ip:
+        message = (
+            "Public IP changed!\n"
+            f"Old: {last_public_ip}\n"
+            f"New: {public_ip}"
+        )
+
+        if local_ip:
+            message += f"\nLocal: {local_ip}"
+
+        for chat_id in get_all_chat_ids():
+            await send_push_message(message, chat_id)
+
+    return public_ip
+
 async def main():
 
     print('In Main')
+    last_public_ip = None
+    next_ip_check = datetime.datetime.now()
+
     while True:
+        if datetime.datetime.now() >= next_ip_check:
+            last_public_ip = await check_public_ip_change(last_public_ip)
+            next_ip_check = datetime.datetime.now() + datetime.timedelta(seconds=IP_CHECK_INTERVAL_SECONDS)
+
         chat_ids =  get_all_chat_ids()
         reminders = get_reminders()
         list = ['Fajr', 'Sunrise','Dhuhr', 'Asr', 'Maghrib', 'Isha']
@@ -277,13 +378,14 @@ def run_bot():
     app.add_handler(CommandHandler('prayerSubscribe', subs_command))
     app.add_handler(CommandHandler('prayerUnsubscribe', unsubs_command))
     app.add_handler(CommandHandler('getchatid', chat_id_command))
+    app.add_handler(CommandHandler('status', status_command))
     app.add_handler(CommandHandler('ask', ask_command))
     app.add_handler(CommandHandler('reboot', reboot_command))
     app.add_handler(CommandHandler('weight', weight_command))
     app.add_handler(CommandHandler('screenshot', screenshot_command))
 
     # Define message handler
-    app.add_handler(MessageHandler(filters.TEXT, handle_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     # Start the bot polling
     app.run_polling()
 

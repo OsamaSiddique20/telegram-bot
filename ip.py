@@ -24,11 +24,11 @@ def get_public_ip():
         print(f"Unable to retrieve local IP address. Error: {e}")
         return None, None
 
-# Example usage:
-public_ip, local_ip = get_public_ip()
+if __name__ == '__main__':
+    public_ip, local_ip = get_public_ip()
 
-if public_ip:
-    print("Public IP:", public_ip)
-    print("Local IP:", local_ip)
-else:
-    print("Could not retrieve IP addresses.")
+    if public_ip:
+        print("Public IP:", public_ip)
+        print("Local IP:", local_ip)
+    else:
+        print("Could not retrieve IP addresses.")
